@@ -5,14 +5,14 @@ import { api } from '@/lib/client';
 import { money } from '@/lib/money';
 
 type Item = { id: number; categoryId: number; name: string; description: string; cash: number; card: number; available: boolean; active: boolean };
-type Menu = { categories: { id: number; name: string }[]; items: Item[]; settings: { taxPct: number; cardSurchargePct: number } };
+type Menu = { categories: { id: number; name: string }[]; items: Item[]; settings: { taxPct: number; cardSurchargePct: number; tableCount: number } };
 
 export function MenuTab() {
   const [menu, setMenu] = useState<Menu | null>(null);
   const [catId, setCatId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<Item | 'new' | null>(null);
-  const [rates, setRates] = useState({ taxPct: '', cardSurchargePct: '' });
+  const [rates, setRates] = useState({ taxPct: '', cardSurchargePct: '', tableCount: '' });
   const [ratesSaved, setRatesSaved] = useState(false);
 
   const load = useCallback(async () => {
@@ -20,7 +20,7 @@ export function MenuTab() {
     if (!r.ok) return setError(r.error);
     setMenu(r.data);
     setCatId((c) => c ?? r.data.categories[0]?.id ?? null);
-    setRates({ taxPct: String(r.data.settings.taxPct), cardSurchargePct: String(r.data.settings.cardSurchargePct) });
+    setRates({ taxPct: String(r.data.settings.taxPct), cardSurchargePct: String(r.data.settings.cardSurchargePct), tableCount: String(r.data.settings.tableCount) });
   }, []);
   useEffect(() => {
     load();
@@ -54,7 +54,11 @@ export function MenuTab() {
           Card surcharge %
           <input className={`${input} w-28 py-2`} inputMode="decimal" value={rates.cardSurchargePct} onChange={(e) => { setRates({ ...rates, cardSurchargePct: e.target.value }); setRatesSaved(false); }} />
         </label>
-        <button className={btn.small}>Save rates</button>
+        <label className="text-sm font-semibold text-zinc-600">
+          Tables
+          <input className={`${input} w-24 py-2`} inputMode="numeric" value={rates.tableCount} onChange={(e) => { setRates({ ...rates, tableCount: e.target.value.replace(/\D/g, '') }); setRatesSaved(false); }} />
+        </label>
+        <button className={btn.small}>Save</button>
         {ratesSaved ? <span className="text-sm font-medium text-emerald-700">Saved</span> : null}
         <p className="basis-full text-sm text-zinc-500">The surcharge only fills in the card price for new and open items. Existing card prices change only when you edit them.</p>
       </form>

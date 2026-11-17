@@ -11,6 +11,7 @@ export type Line = {
   card: number;
   modifiers: Mod[];
   note: string;
+  seat: number; // which guest at the table
   sentAt: string | null;
   doneAt: string | null;
 };

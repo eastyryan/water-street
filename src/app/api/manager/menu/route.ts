@@ -30,7 +30,7 @@ export const POST = route('manager', async ({ body }) => {
  * PATCH { id, available }                         86 / un-86 (any staff member can do this)
  * PATCH { id, active }                            remove from / restore to the menu
  * PATCH { id, name, description, cash, card }     edit
- * PATCH { taxPct, cardSurchargePct }              settings
+ * PATCH { taxPct, cardSurchargePct, tableCount }  settings
  */
 export const PATCH = route('staff', async ({ body, session }) => {
   const sql = db();
@@ -43,6 +43,12 @@ export const PATCH = route('staff', async ({ body, session }) => {
       const n = Number(body[field]);
       if (!Number.isFinite(n) || n < 0 || n > 25) throw bad('Percent must be between 0 and 25.');
       await sql`insert into settings (key, value) values (${key}, ${String(n)})
+                on conflict (key) do update set value = excluded.value`;
+    }
+    if (body.tableCount != null) {
+      const n = Number(body.tableCount);
+      if (!Number.isInteger(n) || n < 0 || n > 60) throw bad('Tables must be a whole number up to 60.');
+      await sql`insert into settings (key, value) values ('table_count', ${String(n)})
                 on conflict (key) do update set value = excluded.value`;
     }
     return { ok: true };

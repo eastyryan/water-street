@@ -192,3 +192,7 @@ alter table orders add column if not exists tip_cents integer not null default 0
 alter table schedule_shifts  enable row level security;
 alter table time_off         enable row level security;
 alter table calendar_events  enable row level security;
+
+-- Which guest at the table ordered each line, so checks can be split per person.
+alter table order_items add column if not exists seat integer not null default 1 check (seat between 1 and 20);
+insert into settings (key, value) values ('table_count', '12') on conflict (key) do nothing;

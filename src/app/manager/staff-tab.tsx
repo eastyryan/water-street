@@ -10,6 +10,8 @@ export function StaffTab() {
   const [staff, setStaff] = useState<Person[] | null>(null);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<Person | 'new' | null>(null);
+  const [demo, setDemo] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const load = useCallback(async () => {
     const r = await api<{ staff: Person[] }>('/api/manager/staff');
@@ -18,12 +20,44 @@ export function StaffTab() {
   }, []);
   useEffect(() => {
     load();
+    api<{ demo: boolean }>('/api/roster').then((r) => r.ok && setDemo(r.data.demo));
   }, [load]);
 
   if (!staff) return <div className="py-16 text-center text-zinc-500">{error || 'Loading…'}</div>;
 
   return (
     <div>
+      {demo ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-amber-100 px-4 py-3 text-amber-950">
+          <span>
+            <b>These are made-up people.</b> When you are ready to use the app for real, clear the demo data and add your own staff.
+          </span>
+          <button className={btn.small} onClick={() => setConfirmClear(true)}>
+            Clear demo data
+          </button>
+        </div>
+      ) : null}
+      {confirmClear ? (
+        <Modal title="Clear all demo data?" onClose={() => setConfirmClear(false)}>
+          <p className="text-zinc-600">This removes every demo employee, shift, time card, check and calendar entry. The menu and your settings stay. You will then create your own manager PIN.</p>
+          <ErrorNote>{error}</ErrorNote>
+          <div className="mt-5 grid grid-cols-2 gap-2">
+            <button className={btn.ghost} onClick={() => setConfirmClear(false)}>
+              Keep it
+            </button>
+            <button
+              className="rounded-xl bg-red-700 px-4 py-3 font-semibold text-white"
+              onClick={async () => {
+                const r = await api('/api/demo', { method: 'DELETE' });
+                if (r.ok) window.location.reload();
+                else setError(r.error);
+              }}
+            >
+              Clear demo data
+            </button>
+          </div>
+        </Modal>
+      ) : null}
       <div className="mb-3 flex items-center justify-between">
         <p className="text-zinc-600">{staff.filter((s) => s.active).length} active</p>
         <button className={btn.primary} onClick={() => setEditing('new')}>

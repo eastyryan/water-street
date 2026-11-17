@@ -6,9 +6,11 @@ import { route } from '@/lib/http';
  * this device. Names are not secret - PINs are, and they never leave the server.
  */
 export const GET = route('public', async ({ session }) => {
-  const staff = await db()`select id, name, role, position from staff where is_active order by name`;
+  const staff = await db()`select id, name, role, position from staff where is_active order by role desc, name`;
+  const [demo] = await db()`select 1 from settings where key = 'demo'`;
   return {
     staff,
+    demo: !!demo,
     needsSetup: !staff.some((s) => s.role === 'manager'),
     session: session ? { id: session.id, name: session.name, role: session.role } : null,
   };

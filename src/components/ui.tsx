@@ -101,7 +101,7 @@ export function PinPad({ onDone, busy, error }: { onDone: (pin: string) => void;
 }
 
 type RosterPerson = { id: number; name: string; role: 'staff' | 'manager'; position: string };
-type Roster = { staff: RosterPerson[]; needsSetup: boolean; session: SessionInfo | null };
+type Roster = { staff: RosterPerson[]; needsSetup: boolean; demo: boolean; session: SessionInfo | null };
 
 /**
  * "Who are you?" -> PIN pad. Renders its children once someone with the right
@@ -168,12 +168,38 @@ export function PinGate({
         <input className={`${input} my-5 text-center`} placeholder="Your name" value={setupName} onChange={(e) => setSetupName(e.target.value)} />
         {setupName.trim() ? (
           <PinPad busy={busy} error={error} onDone={(pin) => submit({ setup: true, name: setupName, pin })} />
-        ) : null}
+        ) : (
+          <>
+            <div className="my-5 flex items-center gap-3 text-sm text-zinc-500">
+              <span className="h-px flex-1 bg-zinc-300" /> or <span className="h-px flex-1 bg-zinc-300" />
+            </div>
+            <button
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                const r = await api('/api/demo', { method: 'POST' });
+                setBusy(false);
+                if (!r.ok) return setError(r.error);
+                load();
+              }}
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 font-semibold text-zinc-800 disabled:opacity-40"
+            >
+              {busy ? 'Loading demo…' : 'Try it with demo data'}
+            </button>
+            <p className="mt-2 text-sm text-zinc-500">Adds made-up staff, a schedule, time cards and sales so you can look around. You can clear it later.</p>
+            <ErrorNote>{error}</ErrorNote>
+          </>
+        )}
       </div>
     );
   }
 
   const people = roster.staff.filter((p) => need === 'staff' || p.role === 'manager');
+  const demoNote = roster.demo ? (
+    <p className="mx-auto mt-6 max-w-sm rounded-lg bg-amber-100 px-3 py-2 text-center text-sm text-amber-950">
+      Demo data. Manager PIN <b>1234</b> · everyone else <b>1111</b>
+    </p>
+  ) : null;
 
   if (!picked) {
     return (
@@ -195,6 +221,7 @@ export function PinGate({
             </button>
           ))}
         </div>
+        {demoNote}
       </div>
     );
   }
@@ -213,6 +240,7 @@ export function PinGate({
       >
         Not you? Go back
       </button>
+      {demoNote}
     </div>
   );
 }

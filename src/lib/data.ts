@@ -6,10 +6,10 @@ import type { Order } from './money';
 export const hashPin = (pin: string) => bcrypt.hash(pin, 10);
 export const checkPin = (pin: string, hash: string) => bcrypt.compare(pin, hash);
 
-export async function getSettings(): Promise<{ taxPct: number; cardSurchargePct: number }> {
-  const rows = await db()`select key, value from settings`;
+export async function getSettings(): Promise<{ taxPct: number; cardSurchargePct: number; tableCount: number }> {
+  const rows = await db()`select key, value from settings where key in ('tax_pct', 'card_surcharge_pct', 'table_count')`;
   const m = Object.fromEntries(rows.map((r) => [r.key, Number(r.value)]));
-  return { taxPct: m.tax_pct ?? 7.5, cardSurchargePct: m.card_surcharge_pct ?? 4 };
+  return { taxPct: m.tax_pct ?? 7.5, cardSurchargePct: m.card_surcharge_pct ?? 4, tableCount: m.table_count ?? 12 };
 }
 
 /** Orders with their line items, shaped for the browser. */
@@ -22,7 +22,7 @@ export async function loadOrders(opts: { id?: number; status?: 'open' } = {}): P
              (select json_agg(json_build_object(
                 'id', i.id, 'menuItemId', i.menu_item_id, 'name', i.name, 'qty', i.qty,
                 'cash', i.cash_cents, 'card', i.card_cents, 'modifiers', i.modifiers,
-                'note', i.note, 'sentAt', i.sent_at, 'doneAt', i.done_at) order by i.id)
+                'note', i.note, 'seat', i.seat, 'sentAt', i.sent_at, 'doneAt', i.done_at) order by i.seat, i.id)
               from order_items i where i.order_id = o.id), '[]'::json) as items
     from orders o
     where true

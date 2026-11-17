@@ -12,7 +12,9 @@ export const GET = route('staff', async ({ params }) => {
 /**
  * Every change to a check goes through here as { action, ... }:
  *
- *   add     { menuItemId, modifierIds, qty, note }   prices are looked up on the server
+ *   add     { menuItemId, modifierIds, qty, note, seat }   prices are looked up on the server
+ *   seat    { itemId, seat }                         move a line to another guest
+ *   split-guests                                     one check per guest
  *   custom  { name, price, note }                    open item, e.g. a daily special
  *   qty     { itemId, qty }                          qty 0 removes the line
  *   note    { itemId, note }                         note for the kitchen
@@ -28,6 +30,8 @@ export const PATCH = route('staff', async ({ params, body, session }) => {
   if (!order) throw bad('Order not found.', 404);
 
   const action = body.action;
+  const seat = body.seat == null ? 1 : int(body.seat, 'Guest');
+  if (seat < 1 || seat > 20) throw bad('Guest number must be between 1 and 20.');
   if (action === 'reopen') {
     if (session.role !== 'manager') throw bad('Only a manager can reopen a closed check.', 403);
     await sql`update orders set status = 'open', payment_method = null, subtotal_cents = null,
@@ -67,8 +71,8 @@ export const PATCH = route('staff', async ({ params, body, session }) => {
     const qty = body.qty == null ? 1 : int(body.qty, 'Quantity');
     if (qty < 1 || qty > 50) throw bad('Quantity must be between 1 and 50.');
     await sql`
-      insert into order_items (order_id, menu_item_id, name, qty, cash_cents, card_cents, modifiers, note)
-      values (${id}, ${item.id}, ${item.name}, ${qty},
+      insert into order_items (order_id, menu_item_id, name, qty, seat, cash_cents, card_cents, modifiers, note)
+      values (${id}, ${item.id}, ${item.name}, ${qty}, ${seat},
               ${item.cash_cents + modifiers.reduce((s, m) => s + m.cash, 0)},
               ${item.card_cents + modifiers.reduce((s, m) => s + m.card, 0)},
               ${sql.json(modifiers)}, ${str(body.note, 200)})`;
@@ -78,8 +82,8 @@ export const PATCH = route('staff', async ({ params, body, session }) => {
     if (!name || cash == null) throw bad('Enter a name and a price.');
     const { cardSurchargePct } = await getSettings();
     await sql`
-      insert into order_items (order_id, name, cash_cents, card_cents, note)
-      values (${id}, ${name}, ${cash}, ${Math.round(cash * (1 + cardSurchargePct / 100))}, ${str(body.note, 200)})`;
+      insert into order_items (order_id, name, seat, cash_cents, card_cents, note)
+      values (${id}, ${name}, ${seat}, ${cash}, ${Math.round(cash * (1 + cardSurchargePct / 100))}, ${str(body.note, 200)})`;
   } else if (action === 'qty') {
     const itemId = int(body.itemId, 'Line');
     const qty = int(body.qty, 'Quantity');
@@ -88,6 +92,20 @@ export const PATCH = route('staff', async ({ params, body, session }) => {
     else await sql`update order_items set qty = ${qty} where id = ${itemId} and order_id = ${id}`;
   } else if (action === 'note') {
     await sql`update order_items set note = ${str(body.note, 200)} where id = ${int(body.itemId, 'Line')} and order_id = ${id}`;
+  } else if (action === 'seat') {
+    await sql`update order_items set seat = ${seat} where id = ${int(body.itemId, 'Line')} and order_id = ${id}`;
+  } else if (action === 'split-guests') {
+    await sql.begin(async (tx) => {
+      const seats = await tx`select distinct seat from order_items where order_id = ${id} order by seat`;
+      if (seats.length < 2) throw bad('Everything on this check belongs to one guest.');
+      // The first guest keeps this check; every other guest gets their own.
+      for (const s of seats.slice(1)) {
+        const [fresh] = await tx`
+          insert into orders (order_type, label, server_id, server_name)
+          select order_type, label, server_id, server_name from orders where id = ${id} returning id`;
+        await tx`update order_items set order_id = ${fresh.id} where order_id = ${id} and seat = ${s.seat}`;
+      }
+    });
   } else if (action === 'split') {
     const ids = Array.isArray(body.itemIds) ? [...new Set(body.itemIds.map((i) => int(i, 'Line')))] : [];
     if (!ids.length) throw bad('Choose what to move to the new check.');

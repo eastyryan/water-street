@@ -10,7 +10,7 @@ import { db } from './db';
  * connected database: create the tables, load the menu, and make a signing
  * secret for login cookies. Bump SCHEMA_VERSION whenever db/schema.sql changes.
  */
-const SCHEMA_VERSION = '2';
+const SCHEMA_VERSION = '3';
 
 const g = globalThis as unknown as { __wscReady?: Promise<string> };
 

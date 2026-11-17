@@ -12,7 +12,7 @@ type Menu = {
   categories: { id: number; name: string }[];
   items: Item[];
   groups: Group[];
-  settings: { taxPct: number; cardSurchargePct: number };
+  settings: { taxPct: number; cardSurchargePct: number; tableCount: number };
 };
 
 export default function OrdersPage() {
@@ -27,6 +27,7 @@ function Orders({ session, signOut }: { session: SessionInfo; signOut: () => voi
   const [menu, setMenu] = useState<Menu | null>(null);
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [currentId, setCurrentId] = useState<number | null>(null);
+  const [tableFilter, setTableFilter] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -69,18 +70,57 @@ function Orders({ session, signOut }: { session: SessionInfo; signOut: () => voi
   return (
     <Shell title="Orders" right={right}>
       <ErrorNote>{error}</ErrorNote>
+      {menu.settings.tableCount > 0 ? (
+        <>
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-500">Tables</h2>
+          <div className="mb-5 grid grid-cols-4 gap-2 sm:grid-cols-6">
+            {Array.from({ length: menu.settings.tableCount }, (_, i) => String(i + 1)).map((t) => {
+              const here = orders.filter((o) => o.orderType === 'dine_in' && o.label === t);
+              const total = here.reduce((s, o) => s + totals(o.items, menu.settings.taxPct).cash.total, 0);
+              return (
+                <button
+                  key={t}
+                  onClick={async () => {
+                    if (here.length === 1) return setCurrentId(here[0].id);
+                    if (here.length > 1) return setTableFilter(t);
+                    // An empty table: tapping it starts a check.
+                    const r = await api<{ order: Order }>('/api/orders', { body: { orderType: 'dine_in', label: t } });
+                    if (!r.ok) return setError(r.error);
+                    put(r.data.order);
+                    setCurrentId(r.data.order.id);
+                  }}
+                  className={`flex h-20 flex-col items-center justify-center rounded-2xl shadow-sm ring-1 ${here.length ? 'bg-navy text-white ring-navy' : 'bg-white text-zinc-800 ring-zinc-200'}`}
+                >
+                  <span className="text-xl font-bold">{t}</span>
+                  <span className={`text-xs ${here.length ? 'text-white/80' : 'text-zinc-400'}`}>
+                    {here.length ? `${money(total)}${here.length > 1 ? ` · ${here.length} checks` : ''}` : 'Open'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      ) : null}
       <NewOrder
         onCreated={(o) => {
           put(o);
           setCurrentId(o.id);
         }}
       />
-      <h2 className="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-zinc-500">Open checks ({orders.length})</h2>
+      <h2 className="mb-2 mt-6 flex items-center gap-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">
+        {tableFilter ? `Table ${tableFilter} checks` : `Open checks (${orders.length})`}
+        {tableFilter ? (
+          <button className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs normal-case tracking-normal text-zinc-700" onClick={() => setTableFilter(null)}>
+            Show all
+          </button>
+        ) : null}
+      </h2>
       {orders.length === 0 ? <p className="rounded-2xl bg-white p-6 text-center text-zinc-500 ring-1 ring-zinc-200">No open checks.</p> : null}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {orders.map((o) => {
+        {orders.filter((o) => !tableFilter || (o.orderType === 'dine_in' && o.label === tableFilter)).map((o) => {
           const unsent = o.items.filter((i) => !i.sentAt).length;
           const cooking = o.items.filter((i) => i.sentAt && !i.doneAt).length;
+          const seats = [...new Set(o.items.map((i) => i.seat))];
           return (
             <button key={o.id} onClick={() => setCurrentId(o.id)} className="rounded-2xl bg-white p-4 text-left shadow-sm ring-1 ring-zinc-200 active:bg-zinc-50">
               <div className="flex items-baseline justify-between">
@@ -93,6 +133,7 @@ function Orders({ session, signOut }: { session: SessionInfo; signOut: () => voi
               <div className="mt-1 flex items-center justify-between text-sm text-zinc-500">
                 <span>
                   {o.serverName} · {fmtTime(o.createdAt)} · {o.items.reduce((s, i) => s + i.qty, 0)} items
+                  {seats.length > 1 ? ` · ${seats.length} guests` : seats[0] > 1 ? ` · guest ${seats[0]}` : ''}
                 </span>
                 {unsent ? (
                   <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-900">{unsent} not sent</span>
@@ -137,7 +178,7 @@ function NewOrder({ onCreated }: { onCreated: (o: Order) => void }) {
             onClick={() => setOrderType(t)}
             className={`rounded-xl py-3 font-semibold ${orderType === t ? 'bg-navy text-white' : 'bg-zinc-100 text-zinc-700'}`}
           >
-            {t === 'dine_in' ? 'Dine in' : 'To-go'}
+            {t === 'dine_in' ? 'Counter / other' : 'To-go'}
           </button>
         ))}
       </div>
@@ -146,8 +187,8 @@ function NewOrder({ onCreated }: { onCreated: (o: Order) => void }) {
           className={input}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={orderType === 'dine_in' ? 'Table (e.g. 4 or Counter 2)' : 'Customer name'}
-          aria-label={orderType === 'dine_in' ? 'Table' : 'Customer name'}
+          placeholder={orderType === 'dine_in' ? 'Other spot (e.g. Counter 2, Patio)' : 'Customer name'}
+          aria-label={orderType === 'dine_in' ? 'Table or spot' : 'Customer name'}
         />
         <button disabled={busy || !text.trim()} className={`${btn.primary} whitespace-nowrap`}>
           New check
@@ -166,6 +207,7 @@ function Editor({ menu, order, onChange, onBack }: { menu: Menu; order: Order; o
   const [picking, setPicking] = useState<Item | null>(null);
   const [dialog, setDialog] = useState<'pay' | 'custom' | 'void' | 'split' | null>(null);
   const [noteFor, setNoteFor] = useState<number | null>(null);
+  const [guest, setGuest] = useState(() => Math.max(1, ...order.items.map((i) => i.seat)));
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -189,11 +231,14 @@ function Editor({ menu, order, onChange, onBack }: { menu: Menu; order: Order; o
 
   const t = totals(order.items, menu.settings.taxPct);
   const unsent = order.items.filter((i) => !i.sentAt).length;
+  // Guests so far: everyone with something ordered, plus the one being rung in now.
+  const guestCount = Math.max(guest, ...order.items.map((i) => i.seat));
+  const takeout = order.orderType === 'takeout';
 
   const tap = (item: Item) => {
     if (!item.available) return;
     if (item.groups.length) setPicking(item);
-    else act({ action: 'add', menuItemId: item.id });
+    else act({ action: 'add', menuItemId: item.id, seat: guest });
   };
 
   return (
@@ -257,10 +302,31 @@ function Editor({ menu, order, onChange, onBack }: { menu: Menu; order: Order; o
               <ErrorNote>{error}</ErrorNote>
             </div>
           ) : null}
+          {!takeout ? (
+            <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 px-4 py-3">
+              <span className="text-sm font-semibold text-zinc-600">Ordering for</span>
+              {Array.from({ length: guestCount }, (_, n) => n + 1).map((n) => (
+                <button key={n} onClick={() => setGuest(n)} aria-pressed={guest === n} className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${guest === n ? 'bg-navy text-white' : 'bg-zinc-100 text-zinc-700'}`}>
+                  Guest {n}
+                </button>
+              ))}
+              {guestCount < 20 ? (
+                <button onClick={() => setGuest(guestCount + 1)} className="rounded-lg border border-dashed border-zinc-400 px-3 py-1.5 text-sm font-semibold text-zinc-600">
+                  + Guest
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {order.items.length === 0 ? <p className="px-4 py-8 text-center text-zinc-500">Tap menu items to add them.</p> : null}
           <ul className="divide-y divide-zinc-100">
-            {order.items.map((i) => (
+            {order.items.map((i, idx) => (
               <li key={i.id} className="px-4 py-3">
+                {guestCount > 1 && (idx === 0 || order.items[idx - 1].seat !== i.seat) ? (
+                  <div className="-mx-4 -mt-3 mb-3 flex justify-between bg-zinc-100 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-600">
+                    <span>Guest {i.seat}</span>
+                    <span className="tabular-nums">{money(order.items.filter((x) => x.seat === i.seat).reduce((s, x) => s + x.qty * x.cash, 0))}</span>
+                  </div>
+                ) : null}
                 <div className="flex items-start justify-between gap-2">
                   <span className="font-semibold leading-snug">{i.name}</span>
                   <span className="whitespace-nowrap tabular-nums">{money(i.qty * i.cash)}</span>
@@ -278,6 +344,20 @@ function Editor({ menu, order, onChange, onBack }: { menu: Menu; order: Order; o
                   <button aria-label="Note for the kitchen" onClick={() => setNoteFor(i.id)} className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-100 active:bg-zinc-200">
                     <StickyNote size={16} />
                   </button>
+                  {guestCount > 1 ? (
+                    <select
+                      aria-label="Move to another guest"
+                      value={i.seat}
+                      onChange={(e) => act({ action: 'seat', itemId: i.id, seat: Number(e.target.value) })}
+                      className="h-9 rounded-lg bg-zinc-100 px-2 text-sm font-medium"
+                    >
+                      {Array.from({ length: guestCount }, (_, n) => n + 1).map((n) => (
+                        <option key={n} value={n}>
+                          Guest {n}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
                   <span className={`ml-auto rounded-full px-2 py-0.5 text-xs font-medium ${!i.sentAt ? 'bg-amber-100 text-amber-900' : i.doneAt ? 'bg-emerald-100 text-emerald-900' : 'bg-sky-100 text-sky-900'}`}>
                     {!i.sentAt ? 'Not sent' : i.doneAt ? 'Ready' : 'In kitchen'}
                   </span>
@@ -323,7 +403,7 @@ function Editor({ menu, order, onChange, onBack }: { menu: Menu; order: Order; o
           groups={picking.groups.map((k) => menu.groups.find((g) => g.key === k)).filter((g): g is Group => !!g)}
           onClose={() => setPicking(null)}
           onAdd={async (body) => {
-            if (await act({ action: 'add', menuItemId: picking.id, ...body })) setPicking(null);
+            if (await act({ action: 'add', menuItemId: picking.id, seat: guest, ...body })) setPicking(null);
           }}
           busy={busy}
           error={error}
@@ -344,7 +424,7 @@ function Editor({ menu, order, onChange, onBack }: { menu: Menu; order: Order; o
         <CustomDialog
           onClose={() => setDialog(null)}
           onAdd={async (body) => {
-            if (await act({ action: 'custom', ...body })) setDialog(null);
+            if (await act({ action: 'custom', seat: guest, ...body })) setDialog(null);
           }}
           error={error}
         />
@@ -368,6 +448,12 @@ function Editor({ menu, order, onChange, onBack }: { menu: Menu; order: Order; o
           order={order}
           error={error}
           onClose={() => setDialog(null)}
+          onByGuest={async () => {
+            if (await act({ action: 'split-guests' })) {
+              setDialog(null);
+              setGuest(1);
+            }
+          }}
           onSplit={async (itemIds) => {
             // The moved lines become a new open check; the 5-second refresh lists it.
             if (await act({ action: 'split', itemIds })) setDialog(null);
@@ -602,11 +688,21 @@ function PayDialog({
   );
 }
 
-function SplitDialog({ order, error, onClose, onSplit }: { order: Order; error: string; onClose: () => void; onSplit: (ids: number[]) => void }) {
+function SplitDialog({ order, error, onClose, onSplit, onByGuest }: { order: Order; error: string; onClose: () => void; onSplit: (ids: number[]) => void; onByGuest: () => void }) {
   const [picked, setPicked] = useState<number[]>([]);
   const toggle = (id: number) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   return (
     <Modal title="Split check" onClose={onClose}>
+      {new Set(order.items.map((i) => i.seat)).size > 1 ? (
+        <>
+          <button onClick={onByGuest} className={`${btn.primary} w-full`}>
+            One check per guest ({new Set(order.items.map((i) => i.seat)).size} checks)
+          </button>
+          <div className="my-4 flex items-center gap-3 text-sm text-zinc-500">
+            <span className="h-px flex-1 bg-zinc-300" /> or pick items <span className="h-px flex-1 bg-zinc-300" />
+          </div>
+        </>
+      ) : null}
       <p className="-mt-1 mb-3 text-sm text-zinc-600">Tick what goes on the new check. Everything else stays here. Repeat for more checks.</p>
       <ul className="divide-y divide-zinc-100 rounded-xl ring-1 ring-zinc-200">
         {order.items.map((i) => (
@@ -616,6 +712,7 @@ function SplitDialog({ order, error, onClose, onSplit }: { order: Order; error: 
               <span className="flex-1">
                 {i.qty > 1 ? `${i.qty} × ` : ''}
                 {i.name}
+                {order.items.some((x) => x.seat !== i.seat) ? <span className="ml-2 text-xs font-semibold text-zinc-500">Guest {i.seat}</span> : null}
                 {i.modifiers.length ? <span className="block text-sm text-zinc-500">{i.modifiers.map((m) => m.name).join(', ')}</span> : null}
               </span>
               <span className="tabular-nums">{money(i.qty * i.cash)}</span>
@@ -648,8 +745,9 @@ function PrintedCheck({ order, taxPct }: { order: Order; taxPct: number }) {
         <br />
         Server: {order.serverName} · {new Date(order.createdAt).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'short', timeStyle: 'short' })}
       </div>
-      {order.items.map((i) => (
+      {order.items.map((i, idx) => (
         <div key={i.id} className="mb-1">
+          {order.items.some((x) => x.seat !== i.seat) && (idx === 0 || order.items[idx - 1].seat !== i.seat) ? <div className="mt-2 font-bold">Guest {i.seat}</div> : null}
           <div className="flex justify-between gap-2">
             <span>
               {i.qty} × {i.name}

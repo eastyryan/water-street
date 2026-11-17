@@ -8,7 +8,7 @@ export const GET = route('staff', async () => {
            min(i.sent_at) filter (where i.done_at is null) as "sentAt",
            json_agg(json_build_object(
              'id', i.id, 'name', i.name, 'qty', i.qty, 'modifiers', i.modifiers,
-             'note', i.note, 'done', i.done_at is not null) order by i.id) as items
+             'note', i.note, 'seat', i.seat, 'done', i.done_at is not null) order by i.seat, i.id) as items
     from orders o
     join order_items i on i.order_id = o.id and i.sent_at is not null
     where o.status <> 'void'

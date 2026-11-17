@@ -11,7 +11,7 @@ type Ticket = {
   label: string;
   serverName: string;
   sentAt: string;
-  items: { id: number; name: string; qty: number; modifiers: Mod[]; note: string; done: boolean }[];
+  items: { id: number; name: string; qty: number; modifiers: Mod[]; note: string; seat: number; done: boolean }[];
 };
 
 export default function KitchenPage() {
@@ -60,6 +60,7 @@ function Board() {
         <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {tickets.map((t) => {
             const age = minutesSince(t.sentAt);
+            const manyGuests = new Set(t.items.map((i) => i.seat)).size > 1;
             const tone = age >= 20 ? 'bg-red-700' : age >= 10 ? 'bg-amber-600' : 'bg-navy';
             return (
               <article key={t.id} className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200">
@@ -81,7 +82,10 @@ function Board() {
                       >
                         <span className="w-7 shrink-0 text-lg font-bold tabular-nums">{i.qty}×</span>
                         <span className="flex-1">
-                          <span className="block text-lg font-semibold leading-snug">{i.name}</span>
+                          <span className="block text-lg font-semibold leading-snug">
+                            {manyGuests ? <span className="mr-2 rounded bg-zinc-200 px-1.5 text-sm text-zinc-700">G{i.seat}</span> : null}
+                            {i.name}
+                          </span>
                           {i.modifiers.length ? <span className="block text-zinc-600">{i.modifiers.map((m) => m.name).join(', ')}</span> : null}
                           {i.note ? <span className="mt-0.5 block font-semibold text-red-700">** {i.note}</span> : null}
                         </span>
