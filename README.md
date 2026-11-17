@@ -23,39 +23,39 @@ One web app that replaces the paper at Water St. Cafe (467 Exchange St., Geneva,
 
 ## Setting it up
 
-You need a Postgres database (a free [Supabase](https://supabase.com) project works) and a place to host the app ([Vercel](https://vercel.com) works).
+The app needs one thing: a Postgres database. On first run it creates its own tables, loads the full menu, and makes its own login-cookie secret.
 
-1. Copy `.env.example` to `.env.local` and fill in the two values:
-   - `DATABASE_URL` - in Supabase: **Connect > Transaction pooler**, copy the URI and put in your database password.
-   - `SESSION_SECRET` - any long random string. `openssl rand -base64 48` makes one.
-2. Install and create the tables. This also loads the full menu the first time:
+**On Vercel (no commands needed):**
 
-   ```bash
-   npm install
-   ```
+1. Import this repo as a Vercel project.
+2. In the project, open **Storage > Create Database > Neon** (free), and connect it to the project. This adds `DATABASE_URL` for you.
+3. Redeploy (**Deployments > ... > Redeploy**) so the site picks up the database.
+4. Open `/manager` on the live site. The first visit asks you to create the first manager and PIN. Then add everyone else under **Staff**.
 
-   ```bash
-   npm run db:setup
-   ```
+Any other Postgres works too (Supabase, for example): set `DATABASE_URL` to its connection string. With Supabase use the **Transaction pooler** URI.
 
-3. Start it:
+**On your own computer:**
 
-   ```bash
-   npm run dev
-   ```
+Copy `.env.example` to `.env.local`, fill in `DATABASE_URL`, then:
 
-4. Open <http://localhost:3000/manager>. The first visit asks you to create the first manager and PIN. Then add everyone else under **Staff**.
+```bash
+npm install
+```
 
-To put it online, import the repo into Vercel and add the same two environment variables there.
+```bash
+npm run dev
+```
+
+Open <http://localhost:3000/manager>.
 
 ## Where things live
 
 ```
 db/schema.sql          tables
-db/menu.mjs            the printed menu, loaded once by db:setup
-scripts/setup-db.mjs   creates tables, loads the menu if empty
+db/menu.mjs            the printed menu, loaded once into an empty database
+src/lib/init.ts        first-run setup: tables, menu, cookie secret
 src/app/api/           server endpoints (auth, clock, orders, kitchen, manager)
-src/app/*/page.tsx     the four screens
+src/app/*/page.tsx     the screens
 src/lib/               database, sessions, money maths
 ```
 

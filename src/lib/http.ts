@@ -1,7 +1,8 @@
 import 'server-only';
 import { NextResponse } from 'next/server';
-import { db } from './db';
-import { readSession, type Session } from './session';
+import { db, NoDatabaseError } from './db';
+import { ensureReady } from './init';
+import { readSession, setSecret, type Session } from './session';
 
 /** Throw from a handler to return a clean error to the browser. */
 export class HttpError extends Error {
@@ -30,6 +31,7 @@ export function route(
 ): Handler {
   return async (req, extra) => {
     try {
+      setSecret(await ensureReady());
       let session = await readSession();
       if (session) {
         // A deactivated or demoted person loses access immediately, not when the cookie expires.
@@ -53,6 +55,12 @@ export function route(
       return result instanceof Response ? result : NextResponse.json(result ?? { ok: true });
     } catch (e) {
       if (e instanceof HttpError) return NextResponse.json({ error: e.message }, { status: e.status });
+      if (e instanceof NoDatabaseError) {
+        return NextResponse.json(
+          { error: 'Almost there: no database is connected yet. In Vercel, open this project > Storage > Create Database > Neon, connect it, then redeploy.' },
+          { status: 503 }
+        );
+      }
       console.error(`${req.method} ${new URL(req.url).pathname} failed:`, e);
       return NextResponse.json({ error: 'Something went wrong on the server. Try again.' }, { status: 500 });
     }

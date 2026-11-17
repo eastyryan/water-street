@@ -15,12 +15,14 @@ const TTL_SECONDS = { staff: 12 * 60 * 60, manager: 2 * 60 * 60 } as const;
 export type Role = 'staff' | 'manager';
 export type Session = { id: number; name: string; role: Role; exp: number };
 
+// Set by route() from ensureReady() before any cookie is signed or checked.
+let current: Buffer | null = null;
+export function setSecret(s: string) {
+  current = Buffer.from(s, 'utf8');
+}
 function secret(): Buffer {
-  const s = process.env.SESSION_SECRET;
-  if (!s || s.length < 32) {
-    throw new Error('SESSION_SECRET is missing or too short (needs >= 32 chars). Generate one with: openssl rand -base64 48');
-  }
-  return Buffer.from(s, 'utf8');
+  if (!current) throw new Error('Session secret used before the app finished starting.');
+  return current;
 }
 
 const sign = (body: string) => createHmac('sha256', secret()).update(body).digest('base64url');

@@ -8,19 +8,27 @@ import postgres from 'postgres';
  * Created lazily so `next build` works without a database configured.
  * `prepare: false` is required by Supabase's transaction pooler.
  */
+export class NoDatabaseError extends Error {
+  constructor() {
+    super('DATABASE_URL is not set.');
+  }
+}
+
 type Sql = ReturnType<typeof postgres>;
 const g = globalThis as unknown as { __wscSql?: Sql };
 
 export function db(): Sql {
   if (!g.__wscSql) {
-    const url = process.env.DATABASE_URL;
-    if (!url) throw new Error('DATABASE_URL is not set. Add it to .env.local and to the hosting project.');
+    // POSTGRES_URL is what some Vercel database integrations name it.
+    const url = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+    if (!url) throw new NoDatabaseError();
     const local = /@(localhost|127\.0\.0\.1)[:/]/.test(url);
     g.__wscSql = postgres(url, {
       prepare: false,
       max: 5,
       idle_timeout: 20,
       ssl: local ? false : 'require',
+      onnotice: () => {},
     });
   }
   return g.__wscSql;
