@@ -18,7 +18,12 @@ async function status(staffId: number) {
     from shifts
     where staff_id = ${staffId}
       and clock_in >= date_trunc('week', now() at time zone ${TZ}) at time zone ${TZ}`;
-  return { open: open ?? null, recent, weekMinutes: week };
+  const scheduled = await sql`
+    select to_char(start_time, 'HH24:MI') as start, to_char(end_time, 'HH24:MI') as "end", position
+    from schedule_shifts
+    where staff_id = ${staffId} and published and day = (now() at time zone ${TZ})::date
+    order by start_time`;
+  return { open: open ?? null, recent, weekMinutes: week, scheduled };
 }
 
 export const GET = route('staff', ({ session }) => status(session.id));

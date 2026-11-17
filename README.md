@@ -7,12 +7,16 @@ One web app that replaces the paper at Water St. Cafe (467 Exchange St., Geneva,
 | **Time Clock** (`/clock`) | Everyone | Tap your name, enter a 4-digit PIN, clock in or out. Shows this week's hours. |
 | **Orders** (`/orders`) | Servers | Open a check for a table or a to-go name, tap menu items and options, send to the kitchen, take payment in cash or card, print a check. |
 | **Kitchen** (`/kitchen`) | Cooks | New tickets appear on their own. Tap an item to cross it off, tap **Done** to clear the ticket. Tickets turn amber at 10 minutes and red at 20. |
-| **Manager** (`/manager`) | Owners | Who is on the clock, today's sales, time cards (fix, approve, export for payroll), the employee list, menu prices and 86'd items, sales reports. |
+| **Schedule** (`/schedule`) | Everyone | Your next shifts, the team's week and month calendar, and time-off requests. |
+| **Manager** (`/manager`) | Owners | Who is on the clock and who is scheduled, today's sales, the schedule builder, time cards (fix, approve, export for payroll), the employee list, menu prices and 86'd items, sales reports. |
 
 ## How it works
 
 - **PINs.** Each person has a 4-digit PIN. PINs are stored hashed and checked on the server. Five wrong tries locks that name for five minutes.
 - **Time cards.** Clock times come from the server, so changing a tablet's clock changes nothing. A person can have only one open shift. Managers can correct a card or add a missed shift; every change needs a reason and is recorded with the manager's name.
+- **Schedule.** Managers build a week by tapping a cell, or copy last week. New shifts are drafts until **Publish week**; staff only see published shifts. Overlapping shifts and shifts on approved time off are refused. The calendar also holds closures and events, such as a Team Room booking.
+- **Time off.** Staff request it from the Schedule screen and a manager approves or denies it.
+- **Split checks and tips.** Split check moves chosen lines to a new check for the same table. A card tip can be recorded at payment and is reported separately from sales.
 - **Prices.** Every item carries the two prices printed on the menu (cash / card). Checks show both totals, and the one charged is saved when the check is paid.
 - **Sales tax.** Set to 7.5% to start. Change it under Manager > Menu.
 - **Times.** Everything is shown in Eastern time, whatever the device is set to.
@@ -59,6 +63,5 @@ After the first setup the menu lives in the database. Change prices from Manager
 
 ## Not built yet
 
-- Split checks (the menu allows up to four per table).
 - Card processing. The app records that a check was paid by card; the card itself is still run on the cafe's reader.
-- Tips, scheduling, and inventory.
+- Shift swaps between staff, text or email reminders, and inventory.

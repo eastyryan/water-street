@@ -2,11 +2,13 @@
 import { CheckCircle2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ErrorNote, PinGate, Shell } from '@/components/ui';
+import { fmtSpan } from '@/components/schedule';
 import { api, fmtDay, fmtHours, fmtTime, type SessionInfo } from '@/lib/client';
 
 type Status = {
   open: { id: number; clock_in: string } | null;
   weekMinutes: number;
+  scheduled: { start: string; end: string; position: string }[];
   recent: { id: number; clock_in: string; clock_out: string | null; minutes: number; status: string }[];
 };
 
@@ -72,6 +74,11 @@ function Punch({ session, signOut }: { session: SessionInfo; signOut: () => void
       <p className="mt-1 text-zinc-600">
         {status.open ? `On the clock since ${fmtTime(status.open.clock_in)}` : 'Not clocked in'}
       </p>
+      {status.scheduled.length ? (
+        <p className="mt-1 text-zinc-600">
+          Scheduled today: <span className="font-semibold">{status.scheduled.map((s) => fmtSpan(s)).join(', ')}</span>
+        </p>
+      ) : null}
 
       <div className="my-6">
         <ErrorNote>{error}</ErrorNote>

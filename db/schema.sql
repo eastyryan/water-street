@@ -146,3 +146,49 @@ alter table menu_items       enable row level security;
 alter table orders           enable row level security;
 alter table order_items      enable row level security;
 alter table settings         enable row level security;
+
+-- ------------------------------------------------------------------ schedule
+-- Planned shifts (the schedule), separate from `shifts` (what was actually worked).
+create table if not exists schedule_shifts (
+  id          integer generated always as identity primary key,
+  staff_id    integer not null references staff(id),
+  day         date not null,
+  start_time  time not null,
+  end_time    time not null,
+  position    text not null default '',
+  note        text not null default '',
+  published   boolean not null default false,   -- staff only see published shifts
+  created_at  timestamptz not null default now(),
+  check (end_time > start_time)
+);
+create index if not exists schedule_shifts_day_idx on schedule_shifts (day);
+
+create table if not exists time_off (
+  id          integer generated always as identity primary key,
+  staff_id    integer not null references staff(id),
+  start_day   date not null,
+  end_day     date not null,
+  reason      text not null default '',
+  status      text not null default 'pending' check (status in ('pending', 'approved', 'denied')),
+  decided_by  text not null default '',
+  created_at  timestamptz not null default now(),
+  check (end_day >= start_day)
+);
+create index if not exists time_off_days_idx on time_off (start_day, end_day);
+
+-- Anything else that belongs on the cafe calendar: closures, catering, team bookings.
+create table if not exists calendar_events (
+  id          integer generated always as identity primary key,
+  day         date not null,
+  title       text not null,
+  note        text not null default '',
+  kind        text not null default 'event' check (kind in ('event', 'closed')),
+  created_at  timestamptz not null default now()
+);
+create index if not exists calendar_events_day_idx on calendar_events (day);
+
+alter table orders add column if not exists tip_cents integer not null default 0;
+
+alter table schedule_shifts  enable row level security;
+alter table time_off         enable row level security;
+alter table calendar_events  enable row level security;

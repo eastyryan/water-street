@@ -3,10 +3,11 @@ import { useState } from 'react';
 import { PinGate, Shell, SignOutButton } from '@/components/ui';
 import { MenuTab } from './menu-tab';
 import { SalesTab, TodayTab } from './sales-tabs';
+import { ScheduleTab } from './schedule-tab';
 import { StaffTab } from './staff-tab';
 import { TimeCardsTab } from './timecards-tab';
 
-const TABS = ['Today', 'Time Cards', 'Staff', 'Menu', 'Sales'] as const;
+const TABS = ['Today', 'Schedule', 'Time Cards', 'Staff', 'Menu', 'Sales'] as const;
 
 export default function ManagerPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]>('Today');
@@ -26,6 +27,7 @@ export default function ManagerPage() {
             ))}
           </nav>
           {tab === 'Today' ? <TodayTab /> : null}
+          {tab === 'Schedule' ? <ScheduleTab /> : null}
           {tab === 'Time Cards' ? <TimeCardsTab /> : null}
           {tab === 'Staff' ? <StaffTab /> : null}
           {tab === 'Menu' ? <MenuTab /> : null}

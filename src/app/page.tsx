@@ -1,12 +1,13 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { ChefHat, Clock, ClipboardList, LayoutDashboard } from 'lucide-react';
+import { CalendarDays, ChefHat, Clock, ClipboardList, LayoutDashboard } from 'lucide-react';
 
 const TILES = [
   { href: '/clock', title: 'Time Clock', sub: 'Clock in or out', Icon: Clock },
   { href: '/orders', title: 'Orders', sub: 'Take and close out checks', Icon: ClipboardList },
   { href: '/kitchen', title: 'Kitchen', sub: 'Tickets on the line', Icon: ChefHat },
-  { href: '/manager', title: 'Manager', sub: 'Staff, hours, menu, sales', Icon: LayoutDashboard },
+  { href: '/schedule', title: 'Schedule', sub: 'Your shifts and time off', Icon: CalendarDays },
+  { href: '/manager', title: 'Manager', sub: 'Schedule, staff, hours, menu, sales', Icon: LayoutDashboard },
 ];
 
 export default function Home() {

@@ -17,7 +17,8 @@ export const GET = route('staff', async ({ params }) => {
  *   qty     { itemId, qty }                          qty 0 removes the line
  *   note    { itemId, note }                         note for the kitchen
  *   send                                             sends unsent lines to the kitchen
- *   pay     { method: 'cash' | 'card' }
+ *   split   { itemIds }                              move lines onto a new check for the same table
+ *   pay     { method: 'cash' | 'card', tip? }        tip is recorded separately from sales
  *   void | reopen                                    reopen is manager-only
  */
 export const PATCH = route('staff', async ({ params, body, session }) => {
@@ -30,7 +31,7 @@ export const PATCH = route('staff', async ({ params, body, session }) => {
   if (action === 'reopen') {
     if (session.role !== 'manager') throw bad('Only a manager can reopen a closed check.', 403);
     await sql`update orders set status = 'open', payment_method = null, subtotal_cents = null,
-              tax_cents = null, total_cents = null, closed_at = null where id = ${id}`;
+              tax_cents = null, total_cents = null, tip_cents = 0, closed_at = null where id = ${id}`;
     return { order: (await loadOrders({ id }))[0] };
   }
   if (order.status !== 'open') throw bad('This check is already closed.', 409);
@@ -87,6 +88,20 @@ export const PATCH = route('staff', async ({ params, body, session }) => {
     else await sql`update order_items set qty = ${qty} where id = ${itemId} and order_id = ${id}`;
   } else if (action === 'note') {
     await sql`update order_items set note = ${str(body.note, 200)} where id = ${int(body.itemId, 'Line')} and order_id = ${id}`;
+  } else if (action === 'split') {
+    const ids = Array.isArray(body.itemIds) ? [...new Set(body.itemIds.map((i) => int(i, 'Line')))] : [];
+    if (!ids.length) throw bad('Choose what to move to the new check.');
+    await sql.begin(async (tx) => {
+      const [{ n, total }] = await tx`select count(*) filter (where id in ${tx(ids)})::int as n, count(*)::int as total
+                                      from order_items where order_id = ${id}`;
+      if (n !== ids.length) throw bad('Some of those lines are not on this check.');
+      if (n === total) throw bad('Leave at least one item on this check.');
+      const [fresh] = await tx`
+        insert into orders (order_type, label, server_id, server_name)
+        select order_type, label, server_id, server_name from orders where id = ${id} returning id`;
+      // Lines keep their kitchen status, so nothing is cooked twice.
+      await tx`update order_items set order_id = ${fresh.id} where id in ${tx(ids)}`;
+    });
   } else if (action === 'send') {
     const sent = await sql`update order_items set sent_at = now() where order_id = ${id} and sent_at is null returning id`;
     if (!sent.length) throw bad('Nothing new to send.');
@@ -97,11 +112,13 @@ export const PATCH = route('staff', async ({ params, body, session }) => {
     if (!items.length) throw bad('This check is empty.');
     const { taxPct } = await getSettings();
     const t = totals(items as unknown as { qty: number; cash: number; card: number }[], taxPct)[method];
+    const tip = body.tip === '' || body.tip == null ? 0 : parseMoney(body.tip);
+    if (tip == null) throw bad('Tip amount is not valid.');
     await sql.begin(async (tx) => {
       // Anything never sent goes to the kitchen now so it cannot be forgotten.
       await tx`update order_items set sent_at = now() where order_id = ${id} and sent_at is null`;
       await tx`update orders set status = 'paid', payment_method = ${method}, subtotal_cents = ${t.subtotal},
-               tax_cents = ${t.tax}, total_cents = ${t.total}, closed_at = now() where id = ${id}`;
+               tax_cents = ${t.tax}, total_cents = ${t.total}, tip_cents = ${tip}, closed_at = now() where id = ${id}`;
     });
   } else if (action === 'void') {
     await sql`update orders set status = 'void', closed_at = now() where id = ${id}`;

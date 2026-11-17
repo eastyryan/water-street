@@ -2,16 +2,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ErrorNote, btn, input } from '@/components/ui';
 import { addDays, api, fmtDayStr, fmtHours, fmtTime, minutesSince, todayStr, weekStart } from '@/lib/client';
+import { fmtSpan } from '@/components/schedule';
 import { money } from '@/lib/money';
 
 type Report = {
   from: string;
   to: string;
-  summary: { orders: number; total: number; subtotal: number; tax: number; cash: number; card: number; cashOrders: number; cardOrders: number };
+  summary: { orders: number; total: number; subtotal: number; tax: number; tips: number; cash: number; card: number; cashOrders: number; cardOrders: number };
   byDay: { day: string; orders: number; total: number }[];
   topItems: { name: string; qty: number; sales: number }[];
   onClock: { id: number; name: string; position: string; clockIn: string }[];
   openOrders: number;
+  scheduled: { id: number; name: string; position: string; start: string; end: string; clockedIn: boolean; pastStart: boolean }[];
   recent: { id: number; label: string; orderType: string; serverName: string; status: string; paymentMethod: string | null; total: number | null; closedAt: string }[];
 };
 
@@ -81,6 +83,30 @@ export function TodayTab() {
                 </li>
               );
             })}
+          </ul>
+        </section>
+        <section className={card}>
+          <h3 className={h3}>Scheduled today ({data.scheduled.length})</h3>
+          {data.scheduled.length === 0 ? <p className="p-4 text-zinc-500">No shifts on today&apos;s schedule.</p> : null}
+          <ul className="divide-y divide-zinc-100">
+            {data.scheduled.map((s) => (
+              <li key={s.id} className="flex items-center justify-between px-4 py-3">
+                <span>
+                  <span className="font-semibold">{s.name}</span>
+                  {s.position ? <span className="text-zinc-500"> · {s.position}</span> : null}
+                </span>
+                <span className="flex items-center gap-2 text-sm">
+                  <span className="tabular-nums text-zinc-600">{fmtSpan(s)}</span>
+                  {s.clockedIn ? (
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-900">Clocked in</span>
+                  ) : s.pastStart ? (
+                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">Not clocked in</span>
+                  ) : (
+                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700">Later</span>
+                  )}
+                </span>
+              </li>
+            ))}
           </ul>
         </section>
         <TopItems items={data.topItems} title="Top sellers today" />
@@ -158,7 +184,7 @@ export function SalesTab() {
             <Stat label="Total collected" value={money(data.summary.total)} sub={`${data.summary.orders} paid checks`} />
             <Stat label="Sales before tax" value={money(data.summary.subtotal)} sub={`Sales tax ${money(data.summary.tax)}`} />
             <Stat label="Cash" value={money(data.summary.cash)} sub={`${data.summary.cashOrders} checks`} />
-            <Stat label="Card" value={money(data.summary.card)} sub={`${data.summary.cardOrders} checks`} />
+            <Stat label="Card" value={money(data.summary.card)} sub={`${data.summary.cardOrders} checks · tips ${money(data.summary.tips)}`} />
           </div>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <section className={card}>

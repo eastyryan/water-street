@@ -164,7 +164,7 @@ function Editor({ menu, order, onChange, onBack }: { menu: Menu; order: Order; o
   const [catId, setCatId] = useState(menu.categories[0]?.id);
   const [search, setSearch] = useState('');
   const [picking, setPicking] = useState<Item | null>(null);
-  const [dialog, setDialog] = useState<'pay' | 'custom' | 'void' | null>(null);
+  const [dialog, setDialog] = useState<'pay' | 'custom' | 'void' | 'split' | null>(null);
   const [noteFor, setNoteFor] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -302,6 +302,9 @@ function Editor({ menu, order, onChange, onBack }: { menu: Menu; order: Order; o
             <button disabled={busy || !order.items.length} onClick={() => setDialog('pay')} className="col-span-2 rounded-xl bg-emerald-700 px-4 py-3 font-semibold text-white active:bg-emerald-800 disabled:opacity-40">
               Take payment
             </button>
+            <button disabled={order.items.length < 2} onClick={() => setDialog('split')} className={`${btn.ghost} col-span-2`}>
+              Split check
+            </button>
             <button disabled={!order.items.length} onClick={() => window.print()} className={`${btn.ghost} flex items-center justify-center gap-2`}>
               <Printer size={18} /> Print check
             </button>
@@ -354,8 +357,20 @@ function Editor({ menu, order, onChange, onBack }: { menu: Menu; order: Order; o
           busy={busy}
           error={error}
           onClose={() => setDialog(null)}
-          onPay={async (method) => {
-            if (await act({ action: 'pay', method })) onBack();
+          onPay={async (method, tip) => {
+            if (await act({ action: 'pay', method, tip })) onBack();
+          }}
+        />
+      ) : null}
+
+      {dialog === 'split' ? (
+        <SplitDialog
+          order={order}
+          error={error}
+          onClose={() => setDialog(null)}
+          onSplit={async (itemIds) => {
+            // The moved lines become a new open check; the 5-second refresh lists it.
+            if (await act({ action: 'split', itemIds })) setDialog(null);
           }}
         />
       ) : null}
@@ -548,9 +563,10 @@ function PayDialog({
   busy: boolean;
   error: string;
   onClose: () => void;
-  onPay: (method: 'cash' | 'card') => void;
+  onPay: (method: 'cash' | 'card', tip: string) => void;
 }) {
   const [tendered, setTendered] = useState('');
+  const [tip, setTip] = useState('');
   const given = Math.round(Number(tendered) * 100);
   const change = tendered && Number.isFinite(given) ? given - cash : null;
 
@@ -564,15 +580,17 @@ function PayDialog({
           <div className="mt-2 min-h-6 text-sm font-semibold">
             {change == null ? null : change >= 0 ? <span className="text-emerald-700">Change due: {money(change)}</span> : <span className="text-red-700">Short by {money(-change)}</span>}
           </div>
-          <button disabled={busy} onClick={() => onPay('cash')} className="mt-2 w-full rounded-xl bg-emerald-700 py-3 font-semibold text-white disabled:opacity-40">
+          <button disabled={busy} onClick={() => onPay('cash', '')} className="mt-2 w-full rounded-xl bg-emerald-700 py-3 font-semibold text-white disabled:opacity-40">
             Paid cash
           </button>
         </div>
         <div className="flex flex-col rounded-2xl bg-zinc-50 p-4 ring-1 ring-zinc-200">
           <div className="text-sm font-semibold text-zinc-500">Card</div>
           <div className="text-3xl font-bold tabular-nums">{money(card)}</div>
-          <p className="mt-3 flex-1 text-sm text-zinc-500">Run this amount on the card reader, then tap below.</p>
-          <button disabled={busy} onClick={() => onPay('card')} className={`${btn.primary} mt-2 w-full`}>
+          <p className="mt-3 text-sm text-zinc-500">Run this on the card reader, then tap below.</p>
+          <input className={`${input} mt-2 py-2`} inputMode="decimal" placeholder="Tip on card (optional)" aria-label="Tip on card" value={tip} onChange={(e) => setTip(e.target.value)} />
+          <span className="flex-1" />
+          <button disabled={busy} onClick={() => onPay('card', tip)} className={`${btn.primary} mt-2 w-full`}>
             Paid by card
           </button>
         </div>
@@ -580,6 +598,37 @@ function PayDialog({
       <div className="mt-3">
         <ErrorNote>{error}</ErrorNote>
       </div>
+    </Modal>
+  );
+}
+
+function SplitDialog({ order, error, onClose, onSplit }: { order: Order; error: string; onClose: () => void; onSplit: (ids: number[]) => void }) {
+  const [picked, setPicked] = useState<number[]>([]);
+  const toggle = (id: number) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  return (
+    <Modal title="Split check" onClose={onClose}>
+      <p className="-mt-1 mb-3 text-sm text-zinc-600">Tick what goes on the new check. Everything else stays here. Repeat for more checks.</p>
+      <ul className="divide-y divide-zinc-100 rounded-xl ring-1 ring-zinc-200">
+        {order.items.map((i) => (
+          <li key={i.id}>
+            <label className="flex cursor-pointer items-center gap-3 px-3 py-3">
+              <input type="checkbox" className="h-5 w-5" checked={picked.includes(i.id)} onChange={() => toggle(i.id)} />
+              <span className="flex-1">
+                {i.qty > 1 ? `${i.qty} × ` : ''}
+                {i.name}
+                {i.modifiers.length ? <span className="block text-sm text-zinc-500">{i.modifiers.map((m) => m.name).join(', ')}</span> : null}
+              </span>
+              <span className="tabular-nums">{money(i.qty * i.cash)}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3">
+        <ErrorNote>{error}</ErrorNote>
+      </div>
+      <button disabled={!picked.length || picked.length === order.items.length} onClick={() => onSplit(picked)} className={`${btn.primary} mt-4 w-full`}>
+        Move {picked.length || ''} to a new check
+      </button>
     </Modal>
   );
 }
